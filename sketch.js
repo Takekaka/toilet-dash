@@ -1,6 +1,6 @@
 // ===================================
 // トイレダッシュ！迷路でうんち回収ゲーム
-//         - 完成版 (スマホ対応) -
+//         - 完成版 (スマホ対応・操作性改善) -
 // ===================================
 
 // ■ ゲーム設定 (定数: constを使用)
@@ -39,9 +39,11 @@ let startTime;
 let clearTime;
 
 // ★スマホ対応: UI関連の変数を追加
-let pad, attackBtn;
-let padKnobPos;
+let attackBtn;
 let touchDevice;
+// ◆変更: 固定パッドからフローティングパッド用の変数へ変更
+let virtualPad = null; // { baseX, baseY, currentX, currentY, id }
+let padSize;
 
 // ■ アセットの読み込み
 function preload() {
@@ -58,7 +60,6 @@ function preload() {
 
 // ■ 初期化 (一度だけ実行)
 function setup() {
-    // ★スマホ対応: ウィンドウサイズでキャンバスを作成
     createCanvas(windowWidth, windowHeight);
     touchDevice = isTouchDevice();
     calculateSizes();
@@ -73,16 +74,13 @@ function windowResized() {
 
 // ★スマホ対応: サイズ計算をまとめた関数
 function calculateSizes() {
-    // 画面の短辺を基準にセルサイズを決定
     let shorterSide = min(width, height);
-    // 迷路が画面に収まるように調整
     cellSize = shorterSide / (MAZE_WIDTH + 2);
 
     if (touchDevice) {
-        // UI要素のサイズと位置を画面サイズに基づいて設定
-        pad = { x: width * 0.18, y: height * 0.8, size: min(width, height) * 0.25 };
+        // ◆変更: 固定パッドの座標設定を削除し、サイズのみ計算
+        padSize = min(width, height) * 0.25;
         attackBtn = { x: width * 0.82, y: height * 0.8, size: min(width, height) * 0.18 };
-        padKnobPos = { x: pad.x, y: pad.y };
     }
 }
 
@@ -163,7 +161,7 @@ function placeObject(arr, additionalProps) {
     }
 }
 
-// ============== ゲームロジックの更新 ==============
+// ============== ゲームロジックの更新 (変更なし) ==============
 function update() {
     if (player.invincible) {
         player.invincibleTimer--;
@@ -209,101 +207,16 @@ function update() {
         clearTime = (millis() - startTime) / 1000;
     }
 }
-
-function updatePoops() {
-    for (const poop of poops) {
-        poop.currentCooldown--;
-        if (poop.currentCooldown <= 0) {
-            poop.currentCooldown = poop.moveCooldown;
-            const possibleMoves = [];
-            const { x, y } = poop;
-            if (y > 1 && maze[y - 1][x] === 0) possibleMoves.push({ dx: 0, dy: -1 });
-            if (y < MAZE_HEIGHT - 2 && maze[y + 1][x] === 0) possibleMoves.push({ dx: 0, dy: 1 });
-            if (x > 1 && maze[y][x - 1] === 0) possibleMoves.push({ dx: -1, dy: 0 });
-            if (x < MAZE_WIDTH - 2 && maze[y][x + 1] === 0) possibleMoves.push({ dx: 1, dy: 0 });
-            if (possibleMoves.length > 0) {
-                const move = random(possibleMoves);
-                poop.x += move.dx;
-                poop.y += move.dy;
-            }
-        }
-    }
-}
-
-function updateEnemies() {
-    for (const enemy of enemies) {
-        enemy.currentCooldown--;
-        if (enemy.currentCooldown <= 0) {
-            enemy.currentCooldown = enemy.moveCooldown;
-            const possibleMoves = [];
-            const { x, y } = enemy;
-            if (y > 1 && maze[y - 1][x] === 0) possibleMoves.push({ dx: 0, dy: -1 });
-            if (y < MAZE_HEIGHT - 2 && maze[y + 1][x] === 0) possibleMoves.push({ dx: 0, dy: 1 });
-            if (x > 1 && maze[y][x - 1] === 0) possibleMoves.push({ dx: -1, dy: 0 });
-            if (x < MAZE_WIDTH - 2 && maze[y][x + 1] === 0) possibleMoves.push({ dx: 1, dy: 0 });
-            if (possibleMoves.length > 0) {
-                const move = random(possibleMoves);
-                enemy.x += move.dx;
-                enemy.y += move.dy;
-            }
-        }
-    }
-}
-
-function updateBullets() {
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i];
-        b.x += b.dx;
-        b.y += b.dy;
-        const gridX = floor(b.x / cellSize);
-        const gridY = floor(b.y / cellSize);
-        if (gridX < 0 || gridX >= MAZE_WIDTH || gridY < 0 || gridY >= MAZE_HEIGHT || maze[gridY][gridX] === 1) {
-            bullets.splice(i, 1);
-            continue;
-        }
-        let hit = false;
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            const e = enemies[j];
-            if (gridX === e.x && gridY === e.y) {
-                enemies.splice(j, 1);
-                const enemyProps = { ...e };
-                delete enemyProps.x;
-                delete enemyProps.y;
-                placeObject(enemies, enemyProps);
-                bullets.splice(i, 1);
-                hit = true;
-                break;
-            }
-        }
-        if (hit) continue;
-        for (let j = poops.length - 1; j >= 0; j--) {
-            const p = poops[j];
-            if (gridX === p.x && gridY === p.y) {
-                startTime -= PENALTY_TIME * 1000;
-                penaltySound.play();
-                const poopProps = { ...p };
-                poops.splice(j, 1);
-                delete poopProps.x;
-                delete poopProps.y;
-                placeObject(poops, poopProps);
-                bullets.splice(i, 1);
-                hit = true;
-                break;
-            }
-        }
-        if (hit) continue;
-    }
-}
+function updatePoops(){for(const t of poops){t.currentCooldown--,t.currentCooldown<=0&&(t.currentCooldown=t.moveCooldown,(()=>{const o=[],{x:s,y:e}=t;e>1&&0===maze[e-1][s]&&o.push({dx:0,dy:-1}),e<MAZE_HEIGHT-2&&0===maze[e+1][s]&&o.push({dx:0,dy:1}),s>1&&0===maze[e][s-1]&&o.push({dx:-1,dy:0}),s<MAZE_WIDTH-2&&0===maze[e][s+1]&&o.push({dx:1,dy:0}),o.length>0&&(()=>{const{dx:e,dy:a}=random(o);t.x+=e,t.y+=a})()})())}}
+function updateEnemies(){for(const t of enemies){t.currentCooldown--,t.currentCooldown<=0&&(t.currentCooldown=t.moveCooldown,(()=>{const o=[],{x:s,y:e}=t;e>1&&0===maze[e-1][s]&&o.push({dx:0,dy:-1}),e<MAZE_HEIGHT-2&&0===maze[e+1][s]&&o.push({dx:0,dy:1}),s>1&&0===maze[e][s-1]&&o.push({dx:-1,dy:0}),s<MAZE_WIDTH-2&&0===maze[e][s+1]&&o.push({dx:1,dy:0}),o.length>0&&(()=>{const{dx:e,dy:a}=random(o);t.x+=e,t.y+=a})()})())}}
+function updateBullets(){for(let t=bullets.length-1;t>=0;t--){const o=bullets[t];o.x+=o.dx,o.y+=o.dy;const s=floor(o.x/cellSize),e=floor(o.y/cellSize);if(s<0||s>=MAZE_WIDTH||e<0||e>=MAZE_HEIGHT||1===maze[e][s]){bullets.splice(t,1);continue}let a=!1;for(let l=enemies.length-1;l>=0;l--){const i=enemies[l];if(s===i.x&&e===i.y){const o={...i};delete o.x,delete o.y,enemies.splice(l,1),placeObject(enemies,o),bullets.splice(t,1),a=!0;break}}if(a)continue;for(let l=poops.length-1;l>=0;l--){const i=poops[l];if(s===i.x&&e===i.y){startTime-=1e3*PENALTY_TIME,penaltySound.play();const o={...i};delete o.x,delete o.y,poops.splice(l,1),placeObject(poops,o),bullets.splice(t,1),a=!0;break}}if(a)continue}}
 
 // ============== 描画関連の関数 ==============
 function drawGame() {
     background(PATH_COLOR);
-    
-    // ★スマホ対応: カメラをプレイヤーに追従させる
     push();
     const mazeTotalWidth = MAZE_WIDTH * cellSize;
     const mazeTotalHeight = MAZE_HEIGHT * cellSize;
-    // カメラの座標を計算。プレイヤーが中心に来るようにするが、迷路の外は映さない
     const camX = constrain(player.x - width / 2, 0, mazeTotalWidth - width);
     const camY = constrain(player.y - height / 2, 0, mazeTotalHeight - height);
     translate(-camX, -camY);
@@ -313,85 +226,46 @@ function drawGame() {
     drawEnemies();
     drawPoops();
     drawPlayer();
-    
-    pop(); // カメラの移動をリセット
+    pop();
 
-    // UIはカメラの影響を受けないように、リセット後に描画
     drawUI();
-    
-    // ★スマホ対応: タッチデバイスの場合、操作UIを描画
     if (touchDevice) {
         drawOnScreenControls();
     }
 }
 
-function drawMaze() {
-    fill(WALL_COLOR);
-    noStroke();
-    for (let y = 0; y < MAZE_HEIGHT; y++) {
-        for (let x = 0; x < MAZE_WIDTH; x++) {
-            if (maze[y][x] === 1) {
-                rect(x * cellSize, y * cellSize, cellSize + 1, cellSize + 1); // +1で隙間をなくす
-            }
-        }
-    }
-}
-
-function drawBullets() {
-    fill(0, 150, 255, 200);
-    noStroke();
-    for (const b of bullets) {
-        ellipse(b.x, b.y, b.size, b.size);
-    }
-}
-
-function drawEnemies() {
-    for (const e of enemies) {
-        const screenX = e.x * cellSize + (cellSize - e.size) / 2;
-        const screenY = e.y * cellSize + (cellSize - e.size) / 2;
-        image(enemyImg, screenX, screenY, e.size, e.size);
-    }
-}
-
-function drawPoops() {
-    for (const p of poops) {
-        const screenX = p.x * cellSize + (cellSize - p.size) / 2;
-        const screenY = p.y * cellSize + (cellSize - p.size) / 2;
-        image(poopImg, screenX, screenY, p.size, p.size);
-    }
-}
-
-function drawPlayer() {
-    if (player.invincible && frameCount % 10 < 5) {
-        return;
-    }
-    image(toiletImg, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
-}
-
-function drawUI() {
-    const elapsedTime = (millis() - startTime) / 1000;
-    fill(0, 150);
-    noStroke();
-    rect(5, 5, width * 0.4, height * 0.1, 10);
-    fill(255);
-    textSize(min(height * 0.03, 20)); // レスポンシブなテキストサイズ
-    textAlign(LEFT, TOP);
-    text(`タイム: ${elapsedTime.toFixed(2)}`, 15, 15);
-    text(`のこりのうんち: ${poops.length}`, 15, 15 + min(height * 0.035, 25));
-}
+function drawMaze() { fill(WALL_COLOR); noStroke(); for (let y = 0; y < MAZE_HEIGHT; y++) for (let x = 0; x < MAZE_WIDTH; x++) if (maze[y][x] === 1) rect(x * cellSize, y * cellSize, cellSize + 1, cellSize + 1); }
+function drawBullets() { fill(0, 150, 255, 200); noStroke(); for (const b of bullets) ellipse(b.x, b.y, b.size, b.size); }
+function drawEnemies() { for (const e of enemies) image(enemyImg, e.x * cellSize + (cellSize - e.size) / 2, e.y * cellSize + (cellSize - e.size) / 2, e.size, e.size); }
+function drawPoops() { for (const p of poops) image(poopImg, p.x * cellSize + (cellSize - p.size) / 2, p.y * cellSize + (cellSize - p.size) / 2, p.size, p.size); }
+function drawPlayer() { if (player.invincible && frameCount % 10 < 5) return; image(toiletImg, player.x - player.size / 2, player.y - player.size / 2, player.size, player.size); }
+function drawUI() { const elapsedTime = (millis() - startTime) / 1000; fill(0, 150); noStroke(); rect(5, 5, width * 0.4, height * 0.1, 10); fill(255); textSize(min(height * 0.03, 20)); textAlign(LEFT, TOP); text(`タイム: ${elapsedTime.toFixed(2)}`, 15, 15); text(`のこりのうんち: ${poops.length}`, 15, 15 + min(height * 0.035, 25)); }
 
 // ★スマホ対応: 画面上のコントローラーを描画する関数
 function drawOnScreenControls() {
-    // 移動パッドのベース
-    noStroke();
-    fill(128, 128, 128, 100);
-    ellipse(pad.x, pad.y, pad.size, pad.size);
+    // ◆変更: フローティングパッドの描画
+    if (virtualPad) {
+        // ベース部分
+        noStroke();
+        fill(128, 128, 128, 100);
+        ellipse(virtualPad.baseX, virtualPad.baseY, padSize, padSize);
 
-    // 移動パッドのノブ
-    fill(200, 200, 200, 150);
-    ellipse(padKnobPos.x, padKnobPos.y, pad.size * 0.5, pad.size * 0.5);
+        // ノブ（動く部分）
+        // ノブがベースから一定距離以上離れないようにする
+        const d = dist(virtualPad.baseX, virtualPad.baseY, virtualPad.currentX, virtualPad.currentY);
+        const maxDist = padSize / 2;
+        let knobX = virtualPad.currentX;
+        let knobY = virtualPad.currentY;
+        if (d > maxDist) {
+            const angle = atan2(virtualPad.currentY - virtualPad.baseY, virtualPad.currentX - virtualPad.baseX);
+            knobX = virtualPad.baseX + cos(angle) * maxDist;
+            knobY = virtualPad.baseY + sin(angle) * maxDist;
+        }
+        fill(200, 200, 200, 150);
+        ellipse(knobX, knobY, padSize * 0.5, padSize * 0.5);
+    }
 
-    // 攻撃ボタン
+    // 攻撃ボタンの描画 (変更なし)
     if (player.attackCooldown > 0) {
         fill(255, 0, 0, 80);
     } else {
@@ -405,58 +279,13 @@ function drawOnScreenControls() {
 }
 
 
-function drawStartScreen() {
-    background(WALL_COLOR);
-    for (const p of titlePoops) {
-        p.y += p.speedY;
-        p.angle += p.rotSpeed;
-        if (p.y > height + p.size) {
-            p.y = -p.size; p.x = random(width);
-        }
-        push();
-        translate(p.x, p.y); rotate(p.angle); tint(255, 150);
-        image(poopImg, -p.size / 2, -p.size / 2, p.size, p.size);
-        pop();
-    }
-    noTint();
-    textAlign(CENTER, CENTER);
-    fill(0, 0, 0, 100);
-    textSize(width * 0.14);
-    text('トイレダッシュ！', width / 2 + 4, height / 2 - 80 + 4);
-    fill('#FFD700');
-    stroke(WALL_COLOR);
-    strokeWeight(5);
-    textSize(width * 0.13);
-    text('トイレダッシュ！', width / 2, height / 2 - 80);
-    const toiletY = height / 2 + 60 + sin(frameCount * 0.05) * 10;
-    image(toiletImg, width / 2 - 75, toiletY, 150, 150);
-    noStroke();
-    textSize(width * 0.035);
-    fill(255, 128 + 127 * sin(frameCount * 0.1));
-    // ★スマホ対応: メッセージ変更
-    text(touchDevice ? '- タップして流す -' : '- クリックして流す -', width / 2, height - 80);
-    textSize(width * 0.03);
-    fill(255);
-    text(touchDevice ? '左のパッド: 移動  |  右のボタン: 攻撃' : 'WASD/矢印キー: 移動  |  スペースキー: 水で攻撃', width / 2, height - 40);
-}
-
-function drawClearScreen() {
-    background(PATH_COLOR);
-    fill(WALL_COLOR);
-    textAlign(CENTER, CENTER);
-    textSize(50);
-    text('ゲームクリア！', width / 2, height / 2 - 60);
-    textSize(30);
-    text(`タイム: ${clearTime.toFixed(2)} 秒`, width / 2, height / 2);
-    textSize(20);
-    text(touchDevice ? 'タップしてタイトルへ' : 'クリックでタイトルへ', width / 2, height / 2 + 60);
-}
+function drawStartScreen() { background(WALL_COLOR); for (const p of titlePoops) { p.y += p.speedY; p.angle += p.rotSpeed; if (p.y > height + p.size) { p.y = -p.size; p.x = random(width); } push(); translate(p.x, p.y); rotate(p.angle); tint(255, 150); image(poopImg, -p.size / 2, -p.size / 2, p.size, p.size); pop(); } noTint(); textAlign(CENTER, CENTER); fill(0, 0, 0, 100); textSize(width * 0.14); text('トイレダッシュ！', width / 2 + 4, height / 2 - 80 + 4); fill('#FFD700'); stroke(WALL_COLOR); strokeWeight(5); textSize(width * 0.13); text('トイレダッシュ！', width / 2, height / 2 - 80); const toiletY = height / 2 + 60 + sin(frameCount * 0.05) * 10; image(toiletImg, width / 2 - 75, toiletY, 150, 150); noStroke(); textSize(width * 0.035); fill(255, 128 + 127 * sin(frameCount * 0.1)); text(touchDevice ? '- タップして流す -' : '- クリックして流す -', width / 2, height - 80); textSize(width * 0.03); fill(255); text(touchDevice ? '左側をタッチ: 移動  |  右下をタップ: 攻撃' : 'WASD/矢印キー: 移動  |  スペースキー: 水で攻撃', width / 2, height - 40); }
+function drawClearScreen() { background(PATH_COLOR); fill(WALL_COLOR); textAlign(CENTER, CENTER); textSize(50); text('ゲームクリア！', width / 2, height / 2 - 60); textSize(30); text(`タイム: ${clearTime.toFixed(2)} 秒`, width / 2, height / 2); textSize(20); text(touchDevice ? 'タップしてタイトルへ' : 'クリックでタイトルへ', width / 2, height / 2 + 60); }
 
 // ============== イベントハンドラ ==============
 function handleInput() {
     const prevX = player.x;
     const prevY = player.y;
-
     let moveX = 0;
     let moveY = 0;
     
@@ -466,46 +295,50 @@ function handleInput() {
     if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { moveX -= 1; player.lastDirection = 'left'; }
     if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) { moveX += 1; player.lastDirection = 'right'; }
 
-    // ★スマホ対応: タッチ入力 ---
-    let padTouched = false;
-    if (touchDevice && touches.length > 0) {
+    // ◆変更: タッチ入力処理をフローティングパッドに対応
+    if (touchDevice) {
+        // 攻撃ボタンの処理 (タッチ開始時ではなく、毎フレーム判定)
         for (let touch of touches) {
-            // 攻撃ボタンの判定
             if (dist(touch.x, touch.y, attackBtn.x, attackBtn.y) < attackBtn.size / 2) {
-                if (player.attackCooldown <= 0) {
-                    launchAttack();
-                    player.attackCooldown = ATTACK_COOLDOWN_TIME;
+                // virtualPadを操作している指でなければ攻撃
+                if (!virtualPad || touch.id !== virtualPad.id) {
+                    if (player.attackCooldown <= 0) {
+                        launchAttack();
+                        player.attackCooldown = ATTACK_COOLDOWN_TIME;
+                    }
                 }
             }
-            // 移動パッドの判定
-            else if (dist(touch.x, touch.y, pad.x, pad.y) < pad.size / 2 + 30) { //少し広めに判定
-                padTouched = true;
-                const dx = touch.x - pad.x;
-                const dy = touch.y - pad.y;
+        }
 
-                // ノブの位置をタッチ座標に更新
-                padKnobPos.x = touch.x;
-                padKnobPos.y = touch.y;
-                
-                // 移動方向を決定
-                if (abs(dx) > abs(dy) * 0.5) { // 左右の入力を優先しやすくする
-                    moveX = dx > 0 ? 1 : -1;
-                    player.lastDirection = dx > 0 ? 'right' : 'left';
+        // 移動パッドの処理
+        if (virtualPad) {
+            // パッドを操作している指の現在位置を更新
+            let padFound = false;
+            for (let touch of touches) {
+                if (touch.id === virtualPad.id) {
+                    virtualPad.currentX = touch.x;
+                    virtualPad.currentY = touch.y;
+                    padFound = true;
+                    break;
                 }
-                if (abs(dy) > abs(dx) * 0.5) { // 上下の入力を優先しやすくする
-                    moveY = dy > 0 ? 1 : -1;
-                    player.lastDirection = dy > 0 ? 'down' : 'up';
+            }
+            // 指が離れた場合（touches配列からIDが見つからなかった場合）
+            if (!padFound) {
+                virtualPad = null;
+            } else {
+                const dx = virtualPad.currentX - virtualPad.baseX;
+                const dy = virtualPad.currentY - virtualPad.baseY;
+                const distFromBase = dist(0, 0, dx, dy);
+
+                // デッドゾーン（少し動かさないと反応しない範囲）を設ける
+                if (distFromBase > padSize * 0.1) {
+                    if (abs(dx) > abs(dy) * 0.5) { moveX = dx > 0 ? 1 : -1; player.lastDirection = dx > 0 ? 'right' : 'left'; }
+                    if (abs(dy) > abs(dx) * 0.5) { moveY = dy > 0 ? 1 : -1; player.lastDirection = dy > 0 ? 'down' : 'up'; }
                 }
             }
         }
     }
     
-    // タッチが離されたらノブを中央に滑らかに戻す
-    if (touchDevice && !padTouched) {
-        padKnobPos.x = lerp(padKnobPos.x, pad.x, 0.2);
-        padKnobPos.y = lerp(padKnobPos.y, pad.y, 0.2);
-    }
-
     // --- プレイヤーの移動処理 ---
     if (moveX !== 0 || moveY !== 0) {
         const moveVec = createVector(moveX, moveY);
@@ -519,12 +352,7 @@ function handleInput() {
     const p_right = floor((player.x + player.size / 2) / cellSize);
     const p_top = floor((player.y - player.size / 2) / cellSize);
     const p_bottom = floor((player.y + player.size / 2) / cellSize);
-    if (p_left < 0 || p_right >= MAZE_WIDTH || p_top < 0 || p_bottom >= MAZE_HEIGHT ||
-        maze[p_top][p_left] === 1 || maze[p_top][p_right] === 1 ||
-        maze[p_bottom][p_left] === 1 || maze[p_bottom][p_right] === 1) {
-        player.x = prevX;
-        player.y = prevY;
-    }
+    if (p_left < 0 || p_right >= MAZE_WIDTH || p_top < 0 || p_bottom >= MAZE_HEIGHT || maze[p_top][p_left] === 1 || maze[p_top][p_right] === 1 || maze[p_bottom][p_left] === 1 || maze[p_bottom][p_right] === 1) { player.x = prevX; player.y = prevY; }
 }
 
 
@@ -533,7 +361,7 @@ function handleGameStart() {
         gameState = 'playing';
         startTime = millis();
         if (getAudioContext().state !== 'running') {
-            userStartAudio(); // ユーザー操作を起点にオーディオを開始
+            userStartAudio();
         }
         if (!bgm.isPlaying()) {
             bgm.loop();
@@ -544,75 +372,50 @@ function handleGameStart() {
     }
 }
 
-// ★スマホ対応: touchStartedでゲーム開始
+// ◆変更: touchStartedの役割をシンプルに
 function touchStarted() {
     if (gameState === 'start' || gameState === 'clear') {
         handleGameStart();
+    } else if (gameState === 'playing' && touchDevice) {
+        // 画面の左半分をタッチしたら、移動パッドを開始
+        // 既にパッド操作中でなければ新しいパッドを開始
+        if (touches[touches.length - 1].x < width / 2 && !virtualPad) {
+            const touch = touches[touches.length - 1];
+            virtualPad = {
+                baseX: touch.x,
+                baseY: touch.y,
+                currentX: touch.x,
+                currentY: touch.y,
+                id: touch.id
+            };
+        }
     }
-    // スマホのデフォルトのタッチイベント（スクロールなど）を無効化
+    return false; // デフォルトのタッチイベントを無効化
+}
+
+// ◆追加: 指が離れたときの処理
+function touchEnded() {
+    if (virtualPad) {
+        // 離れた指がパッド操作用の指だったら、パッドをリセット
+        for (let touch of changedTouches) {
+            if (touch.id === virtualPad.id) {
+                virtualPad = null;
+                break;
+            }
+        }
+    }
     return false;
 }
 
 function mousePressed() {
-    // タッチデバイスでなければマウスで操作
     if (!touchDevice) {
        handleGameStart();
     }
 }
 
-function keyPressed() {
-    if (gameState === 'playing' && keyCode === 32 && player.attackCooldown <= 0) {
-        launchAttack();
-        player.attackCooldown = ATTACK_COOLDOWN_TIME;
-    }
-}
+function keyPressed() { if (gameState === 'playing' && keyCode === 32 && player.attackCooldown <= 0) { launchAttack(); player.attackCooldown = ATTACK_COOLDOWN_TIME; } }
+function launchAttack() { let dx = 0, dy = 0; switch (player.lastDirection) { case 'up': dy = -1; break; case 'down': dy = 1; break; case 'left': dx = -1; break; case 'right': dx = 1; break; } const bullet = { x: player.x, y: player.y, size: cellSize * 0.4, dx: dx * BULLET_SPEED, dy: dy * BULLET_SPEED, }; bullets.push(bullet); }
 
-function launchAttack() {
-    let dx = 0, dy = 0;
-    switch (player.lastDirection) {
-        case 'up':    dy = -1; break;
-        case 'down':  dy = 1;  break;
-        case 'left':  dx = -1; break;
-        case 'right': dx = 1;  break;
-    }
-    const bullet = {
-        x: player.x, y: player.y,
-        size: cellSize * 0.4,
-        dx: dx * BULLET_SPEED, dy: dy * BULLET_SPEED,
-    };
-    bullets.push(bullet);
-}
-
-// ============== 迷路生成 (穴掘り法) ==============
-function generateMaze(w, h) {
-    let newMaze = Array(h).fill(null).map(() => Array(w).fill(1));
-    const stack = [];
-    let cx = 1, cy = 1; newMaze[cy][cx] = 0; stack.push([cx, cy]);
-    while (stack.length > 0) {
-        [cx, cy] = stack[stack.length - 1];
-        const directions = [];
-        if (cx > 1 && newMaze[cy][cx - 2] === 1) directions.push('W');
-        if (cx < w - 2 && newMaze[cy][cx + 2] === 1) directions.push('E');
-        if (cy > 1 && newMaze[cy - 2][cx] === 1) directions.push('N');
-        if (cy < h - 2 && newMaze[cy + 2][cx] === 1) directions.push('S');
-        if (directions.length > 0) {
-            const dir = random(directions);
-            let nx = cx, ny = cy; let wallX = cx, wallY = cy;
-            switch (dir) {
-                case 'N': ny -= 2; wallY -= 1; break;
-                case 'S': ny += 2; wallY += 1; break;
-                case 'W': nx -= 2; wallX -= 1; break;
-                case 'E': nx += 2; wallX += 1; break;
-            }
-            newMaze[ny][nx] = 0; newMaze[wallY][wallX] = 0; stack.push([nx, ny]);
-        } else {
-            stack.pop();
-        }
-    }
-    return newMaze;
-}
-
-// ★スマホ対応: タッチデバイスかどうかの簡易判定
-function isTouchDevice() {
-    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-}
+// ============== 迷路生成 (変更なし) ==============
+function generateMaze(w, h) { let newMaze = Array(h).fill(null).map(() => Array(w).fill(1)); const stack = []; let cx = 1, cy = 1; newMaze[cy][cx] = 0; stack.push([cx, cy]); while (stack.length > 0) { [cx, cy] = stack[stack.length - 1]; const directions = []; if (cx > 1 && newMaze[cy][cx - 2] === 1) directions.push('W'); if (cx < w - 2 && newMaze[cy][cx + 2] === 1) directions.push('E'); if (cy > 1 && newMaze[cy - 2][cx] === 1) directions.push('N'); if (cy < h - 2 && newMaze[cy + 2][cx] === 1) directions.push('S'); if (directions.length > 0) { const dir = random(directions); let nx = cx, ny = cy; let wallX = cx, wallY = cy; switch (dir) { case 'N': ny -= 2; wallY -= 1; break; case 'S': ny += 2; wallY += 1; break; case 'W': nx -= 2; wallX -= 1; break; case 'E': nx += 2; wallX += 1; break; } newMaze[ny][nx] = 0; newMaze[wallY][wallX] = 0; stack.push([nx, ny]); } else { stack.pop(); } } return newMaze; }
+function isTouchDevice() { return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0); }
